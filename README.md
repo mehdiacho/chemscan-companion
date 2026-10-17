@@ -24,6 +24,16 @@ segment, so `1.1` counts as below `1.03` and `1.10` as above it.
 - Click a result to copy it.
 - It can sit over windowed and borderless-fullscreen apps, not exclusive fullscreen.
 
+## Sections
+
+- **ChemScan**: the calculator above.
+- **Names**: the victim's list from the game (`src/names.ts`). Struck names are crossed out and circled names are highlighted. The search box matches any part of a name; Esc clears it.
+- **App**: automatic updates (on by default: checks on launch and every 6 hours, installs and restarts) and a *Check for updates* button.
+
+## Updates
+
+The app reads `latest.json` from the newest GitHub release and installs the NSIS setup. Release builds are signed with the updater key; the private key is the `TAURI_SIGNING_PRIVATE_KEY` Actions secret (local copy at `~/.tauri/chemscan-companion.key`, empty password) and the public key is in `tauri.conf.json`. The portable exe does not update itself.
+
 ## Develop
 
 ```

@@ -26,6 +26,13 @@
         </div>
       </header>
 
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-view="calc">ChemScan</button>
+        <button role="tab" data-view="names">Names</button>
+        <button role="tab" data-view="app">App<span id="update-dot" class="dot" hidden></span></button>
+      </nav>
+
+      <div id="view-calc" class="view">
       <section class="form">
         <label class="field-label">State</label>
         <div class="segmented" data-name="state">
@@ -71,6 +78,34 @@
         </div>
       </section>
       <p id="message" class="message"></p>
+      </div>
+
+      <div id="view-names" class="view" hidden>
+        <div class="names-bar">
+          <input id="name-search" type="search" placeholder="Search names" spellcheck="false" autocomplete="off" />
+          <div class="segmented small" data-name="nameFilter">
+            <button data-value="all">All</button>
+            <button data-value="circled">Circled</button>
+          </div>
+        </div>
+        <p id="name-count" class="count"></p>
+        <div id="name-list" class="name-list"></div>
+      </div>
+
+      <div id="view-app" class="view" hidden>
+        <section class="app-section">
+          <div class="setting">
+            <div>
+              <span class="setting-title">Automatic updates</span>
+              <span class="setting-hint">Checks GitHub on launch and every 6 hours, then installs and restarts.</span>
+            </div>
+            <button id="auto-update" class="switch" role="switch" aria-checked="true"><span></span></button>
+          </div>
+          <button id="check-update" class="primary">Check for updates</button>
+          <p id="update-status" class="message"></p>
+          <p class="version">Version <span id="app-version">–</span></p>
+        </section>
+      </div>
     </main>
 
     <button id="bubble" class="bubble" title="Open ChemScan Companion" hidden>

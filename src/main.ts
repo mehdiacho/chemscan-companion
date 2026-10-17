@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import {
   availableMonitors,
@@ -6,9 +7,14 @@ import {
   LogicalSize,
   PhysicalPosition,
 } from "@tauri-apps/api/window";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
+import { NAMES } from "./names";
 
 type SampleState = "solid" | "liquid" | "gas";
 type Nature = "organic" | "inorganic";
+type View = "calc" | "names" | "app";
+type NameFilter = "all" | "circled";
 
 interface Settings {
   ionSize: number;
@@ -29,14 +35,18 @@ interface Saved {
   weight: string;
   version: string;
   pinned: boolean;
+  view: View;
+  nameFilter: NameFilter;
+  autoUpdate: boolean;
   panelPos?: Point;
   bubblePos?: Point;
 }
 
-const PANEL_SIZE = new LogicalSize(300, 430);
+const PANEL_SIZE = new LogicalSize(300, 470);
 const BUBBLE_SIZE = new LogicalSize(56, 56);
 const STORAGE_KEY = "chemscan-companion";
 const MARGIN = 16;
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const win = getCurrentWindow();
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -55,6 +65,9 @@ function load(): Saved {
     weight: "",
     version: "1.04",
     pinned: true,
+    view: "calc",
+    nameFilter: "all",
+    autoUpdate: true,
   };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -131,7 +144,7 @@ async function recalc() {
   }
 }
 
-function initSegmented(name: "state" | "nature") {
+function initSegmented(name: "state" | "nature" | "nameFilter", onChange: () => void = recalc) {
   const group = document.querySelector<HTMLElement>(`.segmented[data-name="${name}"]`)!;
   const buttons = [...group.querySelectorAll<HTMLButtonElement>("button")];
   const sync = () => buttons.forEach((b) => b.classList.toggle("active", b.dataset.value === saved[name]));
@@ -140,7 +153,7 @@ function initSegmented(name: "state" | "nature") {
       (saved[name] as string) = b.dataset.value!;
       sync();
       persist();
-      recalc();
+      onChange();
     }),
   );
   sync();
@@ -174,6 +187,161 @@ function initCalculator() {
     }),
   );
   recalc();
+}
+
+// ---------- Sections ----------
+
+function showView(view: View) {
+  saved.view = view;
+  persist();
+  document.querySelectorAll<HTMLButtonElement>(".tabs button").forEach((b) => {
+    const on = b.dataset.view === view;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-selected", String(on));
+  });
+  for (const v of ["calc", "names", "app"] as const) $(`#view-${v}`).hidden = v !== view;
+  if (view === "names") nameSearch.focus();
+}
+
+function initTabs() {
+  document
+    .querySelectorAll<HTMLButtonElement>(".tabs button")
+    .forEach((b) => b.addEventListener("click", () => showView(b.dataset.view as View)));
+  showView(saved.view);
+}
+
+// ---------- Names ----------
+
+const nameSearch = $<HTMLInputElement>("#name-search");
+const nameList = $<HTMLDivElement>("#name-list");
+const nameCount = $<HTMLParagraphElement>("#name-count");
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+function highlight(name: string, query: string): string {
+  const i = query ? name.toLowerCase().indexOf(query) : -1;
+  if (i < 0) return escapeHtml(name);
+  const end = i + query.length;
+  return `${escapeHtml(name.slice(0, i))}<mark>${escapeHtml(name.slice(i, end))}</mark>${escapeHtml(name.slice(end))}`;
+}
+
+function renderNames() {
+  const query = nameSearch.value.trim().toLowerCase();
+  const matches = NAMES.filter(
+    (n) =>
+      (saved.nameFilter === "all" || n.circled) &&
+      (!query || (!n.redacted && n.name.toLowerCase().includes(query))),
+  );
+  const circled = matches.filter((n) => n.circled).length;
+  nameCount.textContent = `${matches.length} of ${NAMES.length} names, ${circled} circled`;
+
+  if (matches.length === 0) {
+    nameList.innerHTML = `<p class="empty">No names match.</p>`;
+    return;
+  }
+  let html = "";
+  let column = 0;
+  for (const n of matches) {
+    if (n.column !== column) {
+      column = n.column;
+      html += `<p class="name-col">Column ${column}</p>`;
+    }
+    const cls = ["name", n.circled && "circled", n.struck && "struck", n.redacted && "redacted"].filter(Boolean).join(" ");
+    const label = n.redacted ? "" : highlight(n.name, query);
+    html += `<div class="${cls}" title="${n.redacted ? "Blacked out on the list" : ""}"><span>${label}</span></div>`;
+  }
+  nameList.innerHTML = html;
+}
+
+function initNames() {
+  initSegmented("nameFilter", renderNames);
+  nameSearch.addEventListener("input", renderNames);
+  nameSearch.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      nameSearch.value = "";
+      renderNames();
+    }
+  });
+  renderNames();
+}
+
+// ---------- Updates ----------
+
+const autoUpdateBtn = $<HTMLButtonElement>("#auto-update");
+const checkBtn = $<HTMLButtonElement>("#check-update");
+const updateStatus = $<HTMLParagraphElement>("#update-status");
+const updateDot = $<HTMLSpanElement>("#update-dot");
+let checking = false;
+let updateTimer: number | undefined;
+
+function setUpdateStatus(text: string, error = false) {
+  updateStatus.textContent = text;
+  updateStatus.classList.toggle("error", error);
+}
+
+/** Checks GitHub Releases; if a newer version exists it installs it and restarts. */
+async function checkForUpdates(manual: boolean) {
+  if (checking) return;
+  checking = true;
+  checkBtn.disabled = true;
+  if (manual) setUpdateStatus("Checking for updates…");
+  try {
+    const update = await check();
+    if (!update) {
+      if (manual) setUpdateStatus(`You're on the latest version (checked ${new Date().toLocaleTimeString()}).`);
+      return;
+    }
+    updateDot.hidden = false;
+    setUpdateStatus(`Downloading version ${update.version}…`);
+    let total = 0;
+    let done = 0;
+    await update.downloadAndInstall((event) => {
+      if (event.event === "Started") total = event.data.contentLength ?? 0;
+      if (event.event === "Progress") {
+        done += event.data.chunkLength;
+        if (total) setUpdateStatus(`Downloading version ${update.version}… ${Math.round((done / total) * 100)}%`);
+      }
+      if (event.event === "Finished") setUpdateStatus(`Installing version ${update.version}…`);
+    });
+    await relaunch();
+  } catch (err) {
+    if (manual) setUpdateStatus(`Couldn't check for updates: ${err}`, true);
+    else console.warn("update check failed", err);
+  } finally {
+    checking = false;
+    checkBtn.disabled = false;
+  }
+}
+
+function scheduleUpdates() {
+  clearInterval(updateTimer);
+  updateTimer = undefined;
+  if (!saved.autoUpdate) return;
+  updateTimer = window.setInterval(() => checkForUpdates(false), UPDATE_INTERVAL_MS);
+}
+
+function setAutoUpdate(on: boolean) {
+  saved.autoUpdate = on;
+  autoUpdateBtn.setAttribute("aria-checked", String(on));
+  persist();
+  scheduleUpdates();
+}
+
+async function initUpdates() {
+  autoUpdateBtn.addEventListener("click", () => {
+    setAutoUpdate(!saved.autoUpdate);
+    if (saved.autoUpdate) checkForUpdates(false);
+  });
+  checkBtn.addEventListener("click", () => checkForUpdates(true));
+  setAutoUpdate(saved.autoUpdate);
+  try {
+    $("#app-version").textContent = await getVersion();
+  } catch {
+    // Only available inside the app.
+  }
+  if (saved.autoUpdate) checkForUpdates(false);
 }
 
 // ---------- Window behaviour ----------
@@ -299,4 +467,7 @@ async function initWindow() {
 }
 
 initCalculator();
+initNames();
+initTabs();
 initWindow();
+initUpdates();
