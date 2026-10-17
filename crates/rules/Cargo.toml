@@ -1,0 +1,8 @@
+[package]
+name = "chemscan-rules"
+description = "ChemScan LCA settings rules, kept apart from Tauri so tests build in seconds"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

@@ -1,6 +1,4 @@
-mod rules;
-
-use rules::{Nature, SampleState, Settings};
+use chemscan_rules::{Nature, SampleState, Settings};
 
 #[tauri::command]
 fn calculate(
@@ -9,7 +7,7 @@ fn calculate(
     weight_grams: f64,
     version: String,
 ) -> Result<Settings, String> {
-    rules::calculate(state, nature, weight_grams, &version)
+    chemscan_rules::calculate(state, nature, weight_grams, &version)
 }
 
 pub fn run() {

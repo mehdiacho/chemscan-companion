@@ -1,0 +1,37 @@
+name: Warm cache
+
+# Compiles the release dependencies on main and saves them, so the Release
+# workflow only has to build this app's own code. Runs when dependencies or
+# build settings change, or by hand.
+on:
+  push:
+    branches: [main]
+    paths:
+      - src-tauri/Cargo.toml
+      - src-tauri/Cargo.lock
+      - crates/rules/Cargo.toml
+      - .github/workflows/warm-cache.yml
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          shared-key: release
+
+      - run: npm ci
+
+      # Same cargo invocation tauri-action uses, minus the installers.
+      - run: npx tauri build --no-bundle

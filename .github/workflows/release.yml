@@ -23,14 +23,19 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # Restores the dependency build that "Warm cache" saved from main. Tag runs
+      # can read main's cache but anything they save is only visible to that tag,
+      # so they skip saving.
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: release
+          save-if: ${{ github.ref_type != 'tag' }}
 
       - run: npm ci
 
       - name: Unit tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+        run: cargo test --manifest-path crates/rules/Cargo.toml
 
       - name: Build and publish installers
         uses: tauri-apps/tauri-action@v0

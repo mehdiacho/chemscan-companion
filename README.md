@@ -12,7 +12,7 @@ and type, enter its weight and the LCA version, and it shows the instrument sett
 | Threshold | Liquid delta V / 3, solid delta V / 2, gas delta V x 2. |
 | Matrix size | 5, or 4 on LCA version 1.03 or lower. |
 
-Rules live in `src-tauri/src/rules.rs` with unit tests. Versions compare segment by
+Rules live in `crates/rules/src/lib.rs` with unit tests. Versions compare segment by
 segment, so `1.1` counts as below `1.03` and `1.10` as above it.
 
 ## Window
@@ -29,6 +29,12 @@ segment, so `1.1` counts as below `1.03` and `1.10` as above it.
 ```
 npm install
 npm run tauri dev
-npm test              # cargo unit tests for the rules
+npm test              # rules unit tests (no Tauri build needed)
 npm run tauri build   # exe + NSIS installer in src-tauri/target/release
 ```
+
+## Releases
+
+Bump the version in `src-tauri/tauri.conf.json`, then push a tag (`git tag v0.1.1 && git push origin v0.1.1`).
+The Release workflow publishes a setup exe, an MSI and a portable exe. The Warm cache workflow
+precompiles dependencies on `main` whenever they change, so tag builds start warm.
