@@ -398,10 +398,22 @@ input.invalid {
   border-radius: 2px;
 }
 
+/* Search matches: just the matching letters turn green. */
 .name mark {
-  background: rgba(255, 214, 102, 0.35);
-  color: inherit;
-  border-radius: 2px;
+  background: none;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.name.struck mark {
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+  text-decoration-color: var(--muted);
+}
+
+/* Circled names are already green, so their match goes bright white. */
+.name.circled mark {
+  color: #fff;
 }
 
 .empty {

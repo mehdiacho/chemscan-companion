@@ -32,7 +32,7 @@ export const NAMES: ListedName[] = [
   { name: "Roderick Sawyer", column: 1, circled: false, struck: true },
   { name: "Makhi Brewer", column: 1, circled: false, struck: true },
   { name: "Ruby Bell", column: 1, circled: false, struck: true },
-  { name: "Lara Campbell", column: 1, circled: true, struck: true },
+  { name: "Lara Campbell", column: 1, circled: true, struck: false },
   { name: "Bella Richards", column: 1, circled: false, struck: true },
   { name: "Abigail Kelly", column: 1, circled: false, struck: true },
   { name: "Georgina Carter", column: 1, circled: false, struck: true },
