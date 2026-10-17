@@ -1,0 +1,55 @@
+name: Release
+
+# Push a tag like v0.1.1 (or run manually) to build Windows downloads and
+# publish them on the GitHub release for that tag.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build and publish installers
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseName: ChemScan Companion ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
+          releaseBody: |
+            **ChemScan-Companion-portable.exe** runs without installing.
+            The **setup.exe** and **.msi** install it with a Start menu shortcut.
+          releaseDraft: false
+
+      - name: Attach portable exe
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ github.ref_type == 'tag' && github.ref_name || '' }}"
+          if [ -z "$tag" ]; then tag="v$(node -p "require('./src-tauri/tauri.conf.json').version")"; fi
+          cp src-tauri/target/release/chemscan-companion.exe ChemScan-Companion-portable.exe
+          gh release upload "$tag" ChemScan-Companion-portable.exe --clobber
